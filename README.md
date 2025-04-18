@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+
 # NestJS & Angular Documentation MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -15,8 +16,9 @@ A Model Context Protocol (MCP) service that analyzes NestJS and Angular codebase
 ## How It Works
 
 This service connects to the official GitHub repositories of Angular and NestJS documentation:
-- NestJS: https://github.com/nestjs/docs.nestjs.com/tree/master/content
-- Angular: https://github.com/angular/angular/tree/main/adev/src/content/guide
+
+- NestJS: <https://github.com/nestjs/docs.nestjs.com/tree/master/content>
+- Angular: <https://github.com/angular/angular/tree/main/adev/src/content/guide>
 
 It then analyzes your code and provides suggestions based on best practices found in these documentation sources.
 
@@ -59,12 +61,14 @@ Add the following configuration to your VS Code `settings.json`:
 
 ```json
 "mcp.servers": {
-  "angular-nestjs-docs": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "tsx",
-      "path/to/nestjs-angular-doc-mcp/src/index.ts"
+    "angular-nestjs-docs": {
+      "command": "npx",
+          "args": [
+                   "-y",
+                    "tsx",
+                    "--tsconfig",
+                    "C:/Work/MCP/mcp_documentation_angular_nestjs/tsconfig.json",
+                    "C:/Work/MCP/mcp_documentation_angular_nestjs/src/index.ts"
     ]
   }
 }
@@ -140,6 +144,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Created with ❤️ by [Alex Medina](https://github.com/alx-mp)
 =======
+
 # nestjs-angular-documentation-mcp
+
 A Model Context Protocol (MCP) service that analyzes NestJS and Angular codebases and provides best practice recommendations
 >>>>>>> 8f186e4ef12f6b5b97983146cd8cb2b808b1472b

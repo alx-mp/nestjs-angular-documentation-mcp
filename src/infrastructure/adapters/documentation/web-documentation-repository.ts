@@ -53,6 +53,262 @@ export class WebDocumentationRepository implements DocumentationRepository {
   }
 
   /**
+   * Extracts code from a GitHub file path and visible region
+   * 
+   * This method handles the extraction of code fragments from Angular documentation examples
+   * such as <docs-code path="adev/src/content/examples/form-validation/src/app/template/actor-form-template.component.html" visibleRegion="name-with-error-msg"/>
+   */
+  async extractCodeFromDocumentationPath(repoPath: string, visibleRegion?: string): Promise<string> {
+    try {
+      // Parse the path to determine GitHub path structure
+      // Format: adev/src/content/examples/form-validation/src/app/template/actor-form-template.component.html
+      if (!repoPath) {
+        return '';
+      }
+
+      // Determinar el repositorio y propietario basado en la ruta
+      let owner = 'angular';
+      let repo = 'angular';
+      let branch = 'main';
+      
+      // Comprobar si la ruta indica un repositorio NestJS
+      if (repoPath.includes('nestjs') || repoPath.includes('docs.nestjs.com')) {
+        owner = 'nestjs';
+        repo = 'docs.nestjs.com';
+        branch = 'master';
+      }
+      
+      // Limpiar la ruta si contiene prefijos de repositorio
+      let cleanPath = repoPath;
+      if (cleanPath.startsWith('https://github.com/')) {
+        const parts = cleanPath.replace('https://github.com/', '').split('/');
+        if (parts.length >= 2) {
+          owner = parts[0];
+          repo = parts[1];
+          
+          // Extraer branch si está disponible
+          if (parts.length >= 4 && (parts[2] === 'blob' || parts[2] === 'tree')) {
+            branch = parts[3];
+            cleanPath = parts.slice(4).join('/');
+          } else {
+            cleanPath = parts.slice(2).join('/');
+          }
+        }
+      }
+      
+      console.log(`Extrayendo código de GitHub - Owner: ${owner}, Repo: ${repo}, Branch: ${branch}, Path: ${cleanPath}`);
+      
+      // Primero, intentar obtener metadatos del archivo a través de la API de GitHub
+      const apiUrl = `${this.GITHUB_API_BASE}/${owner}/${repo}/contents/${cleanPath}?ref=${branch}`;
+      
+      try {
+        // Intentar obtener metadatos sobre el archivo
+        const response = await axios.get(apiUrl);
+        
+        // Obtener la URL del contenido raw
+        let rawUrl = '';
+        if (response.data && response.data.download_url) {
+          rawUrl = response.data.download_url;
+        } else {
+          // Intentar construir una URL directa
+          rawUrl = `${this.GITHUB_RAW_CONTENT_BASE}/${owner}/${repo}/${branch}/${cleanPath}`;
+        }
+        
+        // Obtener el contenido del archivo
+        const contentResponse = await axios.get(rawUrl);
+        let fileContent = contentResponse.data;
+        
+        // Si se solicita una región específica, extraer solo esa parte
+        if (visibleRegion) {
+          console.log(`Extrayendo región específica: ${visibleRegion}`);
+          return this.extractVisibleRegion(fileContent, visibleRegion);
+        }
+        
+        return fileContent;
+      } catch (error) {
+        console.error(`Error obteniendo código de GitHub para ruta ${cleanPath}:`, error);
+        
+        // Plan B: Intentar acceso directo al contenido raw
+        try {
+          const rawUrl = `${this.GITHUB_RAW_CONTENT_BASE}/${owner}/${repo}/${branch}/${cleanPath}`;
+          console.log(`Intentando acceso directo a URL raw: ${rawUrl}`);
+          
+          const contentResponse = await axios.get(rawUrl);
+          let fileContent = contentResponse.data;
+          
+          // Si se solicita una región específica, extraer solo esa parte
+          if (visibleRegion) {
+            return this.extractVisibleRegion(fileContent, visibleRegion);
+          }
+          
+          return fileContent;
+        } catch (fallbackError) {
+          console.error(`El intento de fallback también falló para ${cleanPath}:`, fallbackError);
+          
+          // Plan C: Intentar buscar por nombre de archivo
+          try {
+            const fileName = cleanPath.split('/').pop();
+            if (fileName) {
+              console.log(`Intentando buscar archivo por nombre: ${fileName}`);
+              
+              // Obtener todas las secciones y temas
+              const angularSources = await this.getDocumentationSources('angular');
+              const nestjsSources = await this.getDocumentationSources('nestjs');
+              const allSources = [...angularSources, ...nestjsSources];
+              
+              for (const source of allSources) {
+                for (const section of source.getSections()) {
+                  for (const topic of section.getTopics()) {
+                    if (topic.getUrl().includes(fileName)) {
+                      const fullTopic = await this.getTopicById(source.getId(), topic.getId());
+                      if (fullTopic && fullTopic.getContent()) {
+                        // Buscar el fragmento de código en el contenido
+                        const codeExamples = fullTopic.getCodeExamples();
+                        if (codeExamples.length > 0) {
+                          // Intentar encontrar un ejemplo relevante al visibleRegion si se proporciona
+                          if (visibleRegion) {
+                            const matchingExample = codeExamples.find(ex => 
+                              ex.includes(visibleRegion) || 
+                              ex.toLowerCase().includes(fileName.toLowerCase())
+                            );
+                            if (matchingExample) {
+                              return matchingExample;
+                            }
+                          }
+                          
+                          // Si no se encuentra una coincidencia específica, devolver el primer ejemplo
+                          return codeExamples[0];
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (searchError) {
+            console.error(`Error en la búsqueda por nombre de archivo:`, searchError);
+          }
+          
+          return `// Error: No se pudo obtener el código para ${cleanPath}${visibleRegion ? ` con región ${visibleRegion}` : ''}`;
+        }
+      }
+    } catch (error) {
+      console.error(`Error procesando la extracción de código para ${repoPath}:`, error);
+      return `// Error al procesar la solicitud de extracción de código`;
+    }
+  }
+  
+  /**
+   * Extracts a specific region from file content
+   * 
+   * Angular documentation uses region markers like:
+   * // #docregion name-with-error-msg
+   * ...code...
+   * // #enddocregion name-with-error-msg
+   */
+  private extractVisibleRegion(fileContent: string, regionName: string): string {
+    if (!fileContent || !regionName) {
+      return fileContent;
+    }
+    
+    // Different file types use different comment styles for region markers
+    const regionStartPatterns = [
+      new RegExp(`//\\s*#docregion\\s+${regionName}[\\r\\n]`),
+      new RegExp(`<!--\\s*#docregion\\s+${regionName}\\s*-->[\\r\\n]`),
+      new RegExp(`/\\*\\s*#docregion\\s+${regionName}\\s*\\*/[\\r\\n]`)
+    ];
+    
+    const regionEndPatterns = [
+      new RegExp(`//\\s*#enddocregion\\s+${regionName}[\\r\\n]`),
+      new RegExp(`<!--\\s*#enddocregion\\s+${regionName}\\s*-->[\\r\\n]`),
+      new RegExp(`/\\*\\s*#enddocregion\\s+${regionName}\\s*\\*/[\\r\\n]`)
+    ];
+    
+    // Find the start of the region
+    let startIndex = -1;
+    let startPattern = null;
+    
+    for (const pattern of regionStartPatterns) {
+      const match = pattern.exec(fileContent);
+      if (match && (startIndex === -1 || match.index < startIndex)) {
+        startIndex = match.index;
+        startPattern = pattern;
+      }
+    }
+    
+    if (startIndex === -1) {
+      // If no explicit region found, return the whole content
+      return fileContent;
+    }
+    
+    // Find the end position (after the start marker)
+    const contentAfterStart = fileContent.substring(startIndex);
+    let endRelativeIndex = -1;
+    
+    for (const pattern of regionEndPatterns) {
+      const match = pattern.exec(contentAfterStart);
+      if (match && (endRelativeIndex === -1 || match.index < endRelativeIndex)) {
+        endRelativeIndex = match.index;
+      }
+    }
+    
+    if (endRelativeIndex === -1) {
+      // If no end marker found, return the rest of the file
+      return contentAfterStart.substring(startPattern?.exec(contentAfterStart)?.[0].length || 0);
+    }
+    
+    // Extract the content between markers
+    const startMarkerMatch = startPattern?.exec(contentAfterStart)?.[0] || '';
+    const extractedContent = contentAfterStart.substring(
+      startMarkerMatch.length,
+      endRelativeIndex
+    );
+    
+    return extractedContent.trim();
+  }
+
+  /**
+   * Parses a docs-code element to extract path and visibleRegion
+   * 
+   * Takes a string like:
+   * <docs-code header="template/actor-form-template.component.html (name)" path="adev/src/content/examples/form-validation/src/app/template/actor-form-template.component.html" visibleRegion="name-with-error-msg"/>
+   */
+  async extractDocsCodeExample(docsCodeElement: string): Promise<string> {
+    if (!docsCodeElement) return '';
+    
+    try {
+      // Extract path attribute
+      const pathMatch = docsCodeElement.match(/path=["']([^"']+)["']/);
+      const path = pathMatch ? pathMatch[1] : '';
+      
+      // Extract visibleRegion attribute
+      const regionMatch = docsCodeElement.match(/visibleRegion=["']([^"']+)["']/);
+      const region = regionMatch ? regionMatch[1] : '';
+      
+      // Extract header/description (optional)
+      const headerMatch = docsCodeElement.match(/header=["']([^"']+)["']/);
+      const header = headerMatch ? headerMatch[1] : '';
+      
+      if (!path) {
+        return `// No path found in docs-code element: ${docsCodeElement}`;
+      }
+      
+      // Fetch the code
+      const code = await this.extractCodeFromDocumentationPath(path, region);
+      
+      // Format with header if present
+      if (header) {
+        return `// ${header}\n${code}`;
+      }
+      
+      return code;
+    } catch (error) {
+      console.error(`Error extracting docs-code example:`, error);
+      return `// Error extracting code example from: ${docsCodeElement}`;
+    }
+  }
+
+  /**
    * Fetches a specific documentation topic by its ID
    */
   async getTopicById(sourceId: string, topicId: string): Promise<DocumentationTopic | null> {
@@ -491,9 +747,27 @@ export class WebDocumentationRepository implements DocumentationRepository {
    * Extracts title from markdown content
    */
   private extractTitleFromMarkdown(content: string): string | null {
-    // Look for the first heading
-    const titleMatch = content.match(/^#\s+(.+)$/m);
-    return titleMatch ? titleMatch[1].trim() : null;
+    // Intentar extraer primero de los encabezados de primer nivel (# Title)
+    const h1Match = content.match(/^#\s+(.+)$/m);
+    if (h1Match && h1Match[1]) {
+      return h1Match[1].trim();
+    }
+    
+    // Intentar con encabezados decorativos específicos de Angular
+    const decorativeMatch = content.match(/<docs-decorative-header\s+title="([^"]+)"/);
+    if (decorativeMatch && decorativeMatch[1]) {
+      return decorativeMatch[1].trim();
+    }
+    
+    // Buscar encabezados de segundo nivel si no hay de primer nivel
+    const h2Match = content.match(/^##\s+(.+)$/m);
+    if (h2Match && h2Match[1]) {
+      return h2Match[1].trim();
+    }
+    
+    // Buscar la primera línea no vacía como último recurso
+    const firstLineMatch = content.match(/^(.+)$/m);
+    return firstLineMatch ? firstLineMatch[1].trim() : null;
   }
 
   /**
@@ -502,12 +776,67 @@ export class WebDocumentationRepository implements DocumentationRepository {
   private extractCodeExamples(content: string): string[] {
     const codeExamples: string[] = [];
     
-    // Find code blocks with language identifiers
-    const codeBlocks = content.match(/```(?:typescript|javascript|html|css|bash|json)[\s\S]*?```/g);
+    // Extract code blocks with markdown code fence
+    const codeBlockRegex = /```(?:typescript|javascript|html|css)[\s\S]*?```/g;
+    const codeBlocks = content.match(codeBlockRegex);
     
     if (codeBlocks) {
       for (const block of codeBlocks) {
-        codeExamples.push(block);
+        // Clean up the code block by removing the markdown code fence
+        const cleanCode = block
+          .replace(/^```(?:typescript|javascript|html|css)\r?\n/g, '')
+          .replace(/```$/g, '')
+          .trim();
+        
+        if (cleanCode) {
+          codeExamples.push(cleanCode);
+        }
+      }
+    }
+    
+    // Also look for <docs-code> elements which are used in newer Angular documentation
+    const docsCodeRegex = /<docs-code[^>]*>([\s\S]*?)<\/docs-code>/g;
+    const docsCodeBlocks = Array.from(content.matchAll(docsCodeRegex));
+    
+    if (docsCodeBlocks && docsCodeBlocks.length > 0) {
+      for (const match of docsCodeBlocks) {
+        if (match[1] && match[1].trim()) {
+          codeExamples.push(match[1].trim());
+        }
+      }
+    }
+    
+    // Extract code from docs-code with header and path attributes
+    const docsCodeHeaderPathRegex = /<docs-code[^>]*?header=['"]([^'"]+)['"][^>]*?path=['"]([^'"]+)['"][^>]*?>/g;
+    const docsCodeHeaderPathMatches = Array.from(content.matchAll(docsCodeHeaderPathRegex));
+    
+    if (docsCodeHeaderPathMatches && docsCodeHeaderPathMatches.length > 0) {
+      for (const match of docsCodeHeaderPathMatches) {
+        if (match[1] && match[2]) {
+          codeExamples.push(`// Header: ${match[1]}\n// Path reference: ${match[2]}\n// Actual code would be loaded from this path`);
+        }
+      }
+    }
+    
+    // Extract code from visibleRegion attributes which is common in Angular docs
+    const visibleRegionRegex = /visibleRegion=['"]([^'"]+)['"]/g;
+    const visibleRegionMatches = Array.from(content.matchAll(visibleRegionRegex));
+    
+    if (visibleRegionMatches && visibleRegionMatches.length > 0) {
+      for (const match of visibleRegionMatches) {
+        if (match[1]) {
+          codeExamples.push(`// Visible region: ${match[1]}\n// This references a specific section of code in an example file`);
+        }
+      }
+    }
+    
+    // Check for Angular-specific @if syntax in HTML examples
+    // This helps identify and extract modern Angular control flow syntax
+    for (let i = 0; i < codeExamples.length; i++) {
+      const example = codeExamples[i];
+      if (example.includes('@if') || example.includes('@for') || example.includes('@switch')) {
+        // Add a special indicator for modern syntax examples
+        codeExamples[i] = `// Modern Angular control flow syntax\n${example}`;
       }
     }
     
