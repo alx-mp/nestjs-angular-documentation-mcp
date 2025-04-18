@@ -1,5 +1,8 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 
+=======
+>>>>>>> e9eea37f2db6bcd2408c1fdc0d91768d69745a1d
 # NestJS & Angular Documentation MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -64,11 +67,11 @@ Add the following configuration to your VS Code `settings.json`:
     "angular-nestjs-docs": {
       "command": "npx",
           "args": [
-                   "-y",
-                    "tsx",
-                    "--tsconfig",
-                    "C:/Work/MCP/mcp_documentation_angular_nestjs/tsconfig.json",
-                    "C:/Work/MCP/mcp_documentation_angular_nestjs/src/index.ts"
+      "-y",
+      "tsx",
+      "--tsconfig",
+      "C:/Work/MCP/mcp_documentation_angular_nestjs/tsconfig.json",
+      "C:/Work/MCP/mcp_documentation_angular_nestjs/src/index.ts"
     ]
   }
 }
@@ -142,10 +145,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-Created with ❤️ by [Alex Medina](https://github.com/alx-mp)
+Created with ❤️
 =======
 
 # nestjs-angular-documentation-mcp
 
 A Model Context Protocol (MCP) service that analyzes NestJS and Angular codebases and provides best practice recommendations
->>>>>>> 8f186e4ef12f6b5b97983146cd8cb2b808b1472b
