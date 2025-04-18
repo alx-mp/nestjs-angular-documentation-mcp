@@ -70,8 +70,8 @@ Add the following configuration to your VS Code `settings.json`:
       "-y",
       "tsx",
       "--tsconfig",
-      "C:/Work/MCP/mcp_documentation_angular_nestjs/tsconfig.json",
-      "C:/Work/MCP/mcp_documentation_angular_nestjs/src/index.ts"
+      "C:/[YOUR-ROUTE]/mcp_documentation_angular_nestjs/tsconfig.json",
+      "C:/[YOUR-ROUTE]/mcp_documentation_angular_nestjs/src/index.ts"
     ]
   }
 }
@@ -139,9 +139,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
-- [NestJS Documentation](https://docs.nestjs.com/)
-- [Angular Documentation](https://angular.io/docs)
-- [Model Context Protocol (MCP)](https://github.com/anthropics/model-context-protocol)
+- [NestJS Documentation](https://github.com/nestjs/docs.nestjs.com/tree/master/content)
+- [Angular Documentation](https://github.com/angular/angular/tree/main/adev/src/content/guide)
+- [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol)
 
 ---
 
