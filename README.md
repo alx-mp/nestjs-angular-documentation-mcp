@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # NestJS & Angular Documentation MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -138,8 +137,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-Created with ❤️ by [Alex Medina](https://github.com/alx-mp)
+Created with ❤️ 
 =======
 # nestjs-angular-documentation-mcp
 A Model Context Protocol (MCP) service that analyzes NestJS and Angular codebases and provides best practice recommendations
->>>>>>> 8f186e4ef12f6b5b97983146cd8cb2b808b1472b
